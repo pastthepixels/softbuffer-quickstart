@@ -8,27 +8,54 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
+// Window properties
 pub struct WindowProperties {
-    pub width: u32,
-    pub height: u32,
+    width: u32,
+    height: u32,
+    title: String,
 }
 
+impl WindowProperties {
+    pub fn new(width: u32, height: u32, title: &str) -> WindowProperties {
+        WindowProperties {
+            width,
+            height,
+            title: String::from(title),
+        }
+    }
+    pub fn get_size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+    pub fn get_title(&self) -> &str {
+        self.title.as_str()
+    }
+}
+
+// Softbuffer Window
 pub struct SoftbufferWindow<T>
 where
-    T: FnMut(WindowProperties) -> Box<[u32]>,
+    T: FnMut(Rc<Window>) -> Box<[u32]>,
 {
     window: Option<Rc<Window>>,
     loop_fn: T,
     surface: Option<Surface<Rc<Window>, Rc<Window>>>,
+    properties: WindowProperties,
 }
 
 impl<T> ApplicationHandler for SoftbufferWindow<T>
 where
-    T: FnMut(WindowProperties) -> Box<[u32]>,
+    T: FnMut(Rc<Window>) -> Box<[u32]>,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
-            let window = event_loop.create_window(Window::default_attributes());
+            let window = event_loop.create_window(
+                Window::default_attributes()
+                    .with_title(self.properties.get_title())
+                    .with_inner_size(winit::dpi::LogicalSize::new(
+                        self.properties.get_size().0,
+                        self.properties.get_size().1,
+                    )),
+            );
             Rc::new(window.unwrap())
         };
         let context = softbuffer::Context::new(window.clone()).unwrap();
@@ -36,7 +63,7 @@ where
         self.surface = Some(softbuffer::Surface::new(&context, window.clone()).unwrap());
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -56,10 +83,9 @@ where
                     .unwrap();
 
                 let mut buffer = surface.buffer_mut().unwrap();
-                let loop_buffer = (self.loop_fn)(WindowProperties { width, height });
-                for index in 0..(loop_buffer.len()) {
-                    buffer[index as usize] = loop_buffer.as_ref()[index as usize];
-                }
+                let loop_buffer = (self.loop_fn)(window);
+
+                buffer[..loop_buffer.len()].clone_from_slice(loop_buffer.as_ref());
 
                 buffer.present().unwrap();
 
@@ -72,28 +98,20 @@ where
 
 impl<T> SoftbufferWindow<T>
 where
-    T: FnMut(WindowProperties) -> Box<[u32]>,
+    T: FnMut(Rc<Window>) -> Box<[u32]>,
 {
-    pub fn new(loop_fn: T) -> SoftbufferWindow<T> {
+    pub fn new(loop_fn: T, properties: WindowProperties) -> SoftbufferWindow<T> {
         SoftbufferWindow {
             window: None,
             loop_fn,
             surface: None,
+            properties,
         }
     }
 
     pub fn run(&mut self) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
-
-        // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
-        // dispatched any events. This is ideal for games and similar applications.
         event_loop.set_control_flow(ControlFlow::Poll);
-
-        // ControlFlow::Wait pauses the event loop if no events are available to process.
-        // This is ideal for non-game applications that only update in response to user
-        // input, and uses significantly less power/CPU time than ControlFlow::Poll.
-        event_loop.set_control_flow(ControlFlow::Wait);
-
         event_loop.run_app(self)
     }
 }
