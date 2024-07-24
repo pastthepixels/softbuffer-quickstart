@@ -34,7 +34,7 @@ impl WindowProperties {
 // Softbuffer Window
 pub struct SoftbufferWindow<T>
 where
-    T: FnMut(Rc<Window>) -> Vec<u32>,
+    T: FnMut(Rc<Window>, &mut [u32]),
 {
     window: Option<Rc<Window>>,
     loop_fn: T,
@@ -44,7 +44,7 @@ where
 
 impl<T> ApplicationHandler for SoftbufferWindow<T>
 where
-    T: FnMut(Rc<Window>) -> Vec<u32>,
+    T: FnMut(Rc<Window>, &mut [u32]),
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
@@ -83,9 +83,8 @@ where
                     .unwrap();
 
                 let mut buffer = surface.buffer_mut().unwrap();
-                let loop_buffer = (self.loop_fn)(window);
 
-                buffer.clone_from_slice(loop_buffer.as_ref());
+                (self.loop_fn)(window, buffer.as_mut());
 
                 buffer.present().unwrap();
 
@@ -98,7 +97,7 @@ where
 
 impl<T> SoftbufferWindow<T>
 where
-    T: FnMut(Rc<Window>) -> Vec<u32>,
+    T: FnMut(Rc<Window>, &mut [u32]),
 {
     pub fn new(loop_fn: T, properties: WindowProperties) -> SoftbufferWindow<T> {
         SoftbufferWindow {
