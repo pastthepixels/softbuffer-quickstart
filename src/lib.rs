@@ -15,6 +15,16 @@ pub struct WindowProperties {
     title: String,
 }
 
+impl std::default::Default for WindowProperties {
+    fn default() -> WindowProperties {
+        WindowProperties {
+            width: 800,
+            height: 600,
+            title: String::from("Softbuffer window"),
+        }
+    }
+}
+
 impl WindowProperties {
     pub fn new(width: u32, height: u32, title: &str) -> WindowProperties {
         WindowProperties {
