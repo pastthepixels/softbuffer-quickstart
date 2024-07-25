@@ -30,6 +30,7 @@ fn main() {
     window.run().expect("window can't run :(");
 }
 ```
+(Unlike Softbuffer, nothing is hidden from this example.)
 
 
 ## Contributing
