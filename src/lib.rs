@@ -8,7 +8,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
-// Window properties
+/// Contains a few potential properties to set for a SoftbufferWindow when it is created.
 pub struct WindowProperties {
     width: u32,
     height: u32,
@@ -41,7 +41,7 @@ impl WindowProperties {
     }
 }
 
-// Softbuffer Window
+/// Wrapper for Softbuffer and a Winit window
 pub struct SoftbufferWindow<T>
 where
     T: FnMut(Rc<Window>, &mut [u32]),
@@ -109,6 +109,10 @@ impl<T> SoftbufferWindow<T>
 where
     T: FnMut(Rc<Window>, &mut [u32]),
 {
+    /// Creates a new SoftbufferWindow.
+    /// `loop_fn` will be called every time the window needs to redraw,
+    /// and `properties` contains a WindowProperties instance that will be
+    /// read when the window is created.
     pub fn new(loop_fn: T, properties: WindowProperties) -> SoftbufferWindow<T> {
         SoftbufferWindow {
             window: None,
@@ -118,6 +122,7 @@ where
         }
     }
 
+    /// Runs a SoftbufferWindow event loop.
     pub fn run(&mut self) -> Result<(), EventLoopError> {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
