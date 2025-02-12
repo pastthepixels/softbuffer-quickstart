@@ -2,7 +2,7 @@
 name = "softbuffer_quickstart"
 description = "minifb-like interface for softbuffer"
 repository = "https://github.com/pastthepixels/softbuffer-quickstart"
-version = "0.2.0"
+version = "0.3.0"
 license = "GPL-3.0"
 keywords = ["graphics"]
 categories = ["graphics", "multimedia", "rendering"]
