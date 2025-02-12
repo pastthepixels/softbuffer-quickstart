@@ -9,10 +9,11 @@ use winit::event::WindowEvent;
 
 fn main() {
     let mut window = SoftbufferWindow::new(WindowProperties::default());
-    window.run(move |window, event| {
-        match event {
+    window
+        .run(move |window, event| match event {
             WindowEvent::RedrawRequested => {
                 let (width, height) = window.inner_size();
+                let mut buffer = window.buffer_mut();
                 for index in 0..(width * height) {
                     let y = index / width;
                     let x = index % width;
@@ -20,12 +21,12 @@ fn main() {
                     let green = y % 255;
                     let blue = (x * y) % 255;
 
-                    window.buffer_set(index, blue | (green << 8) | (red << 16));
+                    buffer[index] = (blue | (green << 8) | (red << 16)).try_into().unwrap();
                 }
             }
-            _ => ()
-        }
-    }).expect("window can't run :(");
+            _ => (),
+        })
+        .expect("window can't run :(");
 }
 ```
 
