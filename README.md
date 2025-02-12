@@ -5,29 +5,27 @@ A wrapper that makes using Softbuffer as easy as using minifb.
 Running the Softbuffer example in softbuffer-quickstart:
 ```rust
 use softbuffer_quickstart::{SoftbufferWindow, WindowProperties};
+use winit::event::WindowEvent;
 
 fn main() {
-    let mut window = SoftbufferWindow::new(
-        // This is the "loop closure" -- called on every update loop
-        |window, buffer| {
-            let (width, height) = {
-                let size = window.inner_size();
-                (size.width, size.height)
-            };
-            for index in 0..(width * height) {
-                let y = index / width;
-                let x = index % width;
-                let red = x % 255;
-                let green = y % 255;
-                let blue = (x * y) % 255;
+    let mut window = SoftbufferWindow::new(WindowProperties::default());
+    window.run(move |window, event| {
+        match event {
+            WindowEvent::RedrawRequested => {
+                let (width, height) = window.inner_size();
+                for index in 0..(width * height) {
+                    let y = index / width;
+                    let x = index % width;
+                    let red = x % 255;
+                    let green = y % 255;
+                    let blue = (x * y) % 255;
 
-                buffer[index as usize] = blue | (green << 8) | (red << 16);
+                    window.buffer_set(index, blue | (green << 8) | (red << 16));
+                }
             }
-        },
-        // This is how we can set properties for the window when it's initially created.
-        WindowProperties::default()
-    );
-    window.run().expect("window can't run :(");
+            _ => ()
+        }
+    }).expect("window can't run :(");
 }
 ```
 
