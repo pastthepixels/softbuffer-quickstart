@@ -11,49 +11,42 @@ use winit::window::{Window, WindowId};
 
 /// Contains a few potential properties to set for a SoftbufferWindow when it is created.
 pub struct WindowProperties {
-    pub size: PhysicalSize<u32>,
-    pub title: Box<str>,
+    /// Initial width
+    pub width: u32,
+    /// Initial height
+    pub height: u32,
+    /// Title
+    pub title: &'static str,
 }
 
 impl Default for WindowProperties {
     fn default() -> WindowProperties {
         WindowProperties {
-            size: PhysicalSize::new(800, 600),
-            title: "Softbuffer window".into(),
-        }
-    }
-}
-
-impl WindowProperties {
-    pub fn new(width: u32, height: u32, title: &str) -> WindowProperties {
-        WindowProperties {
-            size: PhysicalSize::new(width, height),
-            title: title.into(),
+            width: 800,
+            height: 600,
+            title: "Softbuffer Window",
         }
     }
 }
 
 /// Wrapper for Softbuffer and a Winit window
-pub struct SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
+pub struct SoftbufferWindow {
     window: Option<Rc<Window>>,
-    loop_fn: T,
+    loop_fn: Option<Box<dyn FnMut(&mut SoftbufferWindow, WindowEvent)>>,
     surface: Option<Surface<Rc<Window>, Rc<Window>>>,
     properties: WindowProperties,
 }
 
-impl<T> ApplicationHandler for SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
+impl ApplicationHandler for SoftbufferWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
             let window = event_loop.create_window(
                 Window::default_attributes()
                     .with_title(self.properties.title.clone())
-                    .with_inner_size(self.properties.size),
+                    .with_inner_size(PhysicalSize::new(
+                        self.properties.width,
+                        self.properties.height,
+                    )),
             );
             Rc::new(window.unwrap())
         };
@@ -63,12 +56,12 @@ where
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // Automatic event handling
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::Resized(new_size) => {
-                self.properties.size = new_size;
                 let (width, height) = (new_size.width, new_size.height);
                 self.surface
                     .as_mut()
@@ -79,38 +72,93 @@ where
                     )
                     .unwrap();
             }
-            WindowEvent::RedrawRequested => {
-                let mut buffer = self.surface.as_mut().unwrap().buffer_mut().unwrap();
-                (self.loop_fn)(self.window.clone().unwrap(), buffer.as_mut());
-                buffer.present().unwrap();
-                self.window.as_ref().unwrap().request_redraw();
-            }
             _ => (),
+        }
+
+        let is_redraw_requested = event == WindowEvent::RedrawRequested;
+
+        // User event handling
+        if self.loop_fn.is_some() {
+            let mut loop_fn = self.loop_fn.take().unwrap();
+            loop_fn(self, event);
+            self.loop_fn = Some(loop_fn);
+        }
+
+        // Displays buffer automatically if event is RedrawRequested
+        if is_redraw_requested {
+            let buffer = self.surface.as_mut().unwrap().buffer_mut().unwrap();
+            buffer.present().unwrap();
+
+            self.window.as_ref().unwrap().request_redraw();
         }
     }
 }
 
-impl<T> SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
+impl SoftbufferWindow {
     /// Creates a new SoftbufferWindow.
-    /// `loop_fn` will be called every time the window needs to redraw,
-    /// and `properties` contains a WindowProperties instance that will be
-    /// read when the window is created.
-    pub fn new(loop_fn: T, properties: WindowProperties) -> SoftbufferWindow<T> {
+    /// Example usage:
+    /// ```rust
+    /// let window = SoftbufferWindow::new(WindowProperties::default());
+    /// ```
+    pub fn new(properties: WindowProperties) -> Self {
         SoftbufferWindow {
             window: None,
-            loop_fn,
+            loop_fn: None,
             surface: None,
             properties,
         }
     }
 
     /// Runs a SoftbufferWindow event loop.
-    pub fn run(&mut self) -> Result<(), EventLoopError> {
+    /// To handle events, you need winit's `WindowEvent` enum.
+    /// Example usage:
+    /// ```rust
+    /// window.run(move |window, event| {
+    ///     match event {
+    ///         WindowEvent::RedrawRequested => (),
+    ///         _ => ()
+    ///     }
+    /// });
+    /// ```
+    pub fn run(
+        &mut self,
+        event_fn: impl FnMut(&mut SoftbufferWindow, WindowEvent) + 'static,
+    ) -> Result<(), EventLoopError> {
+        self.loop_fn = Some(Box::new(event_fn));
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
         event_loop.run_app(self)
+    }
+
+    /// Returns the size of a window as a tuple
+    pub fn inner_size(&mut self) -> (usize, usize) {
+        let size = self.window.clone().unwrap().inner_size();
+        (size.width as usize, size.height as usize)
+    }
+
+    /// Copies a u32 slice to the buffer
+    pub fn buffer_cpy(&mut self, src: &[u32]) {
+        self.surface
+            .as_mut()
+            .unwrap()
+            .buffer_mut()
+            .unwrap()
+            .as_mut()
+            .copy_from_slice(src);
+    }
+
+    /// Sets the color value of a pixel in the buffer
+    pub fn buffer_set(&mut self, idx: usize, src: u32) {
+        self.surface.as_mut().unwrap().buffer_mut().unwrap()[idx] = src;
+    }
+
+    /// Gets the color value of a pixel in the buffer
+    pub fn buffer_get(&mut self, idx: usize) -> u32 {
+        self.surface.as_mut().unwrap().buffer_mut().unwrap()[idx]
+    }
+
+    /// Returns the size of the buffer
+    pub fn buffer_len(&mut self) -> usize {
+        self.surface.as_mut().unwrap().buffer_mut().unwrap().len()
     }
 }
