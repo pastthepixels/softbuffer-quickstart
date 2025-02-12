@@ -42,7 +42,7 @@ impl ApplicationHandler for SoftbufferWindow {
         let window = {
             let window = event_loop.create_window(
                 Window::default_attributes()
-                    .with_title(self.properties.title.clone())
+                    .with_title(self.properties.title)
                     .with_inner_size(PhysicalSize::new(
                         self.properties.width,
                         self.properties.height,
@@ -61,14 +61,13 @@ impl ApplicationHandler for SoftbufferWindow {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::Resized(new_size) => {
-                let (width, height) = (new_size.width, new_size.height);
+            WindowEvent::Resized(size) => {
                 self.surface
                     .as_mut()
                     .unwrap()
                     .resize(
-                        NonZeroU32::new(width).unwrap(),
-                        NonZeroU32::new(height).unwrap(),
+                        NonZeroU32::new(size.width).unwrap(),
+                        NonZeroU32::new(size.height).unwrap(),
                     )
                     .unwrap();
             }
@@ -86,9 +85,13 @@ impl ApplicationHandler for SoftbufferWindow {
 
         // Displays buffer automatically if event is RedrawRequested
         if is_redraw_requested {
-            let buffer = self.surface.as_mut().unwrap().buffer_mut().unwrap();
-            buffer.present().unwrap();
-
+            self.surface
+                .as_mut()
+                .unwrap()
+                .buffer_mut()
+                .unwrap()
+                .present()
+                .unwrap();
             self.window.as_ref().unwrap().request_redraw();
         }
     }
@@ -136,29 +139,8 @@ impl SoftbufferWindow {
         (size.width as usize, size.height as usize)
     }
 
-    /// Copies a u32 slice to the buffer
-    pub fn buffer_cpy(&mut self, src: &[u32]) {
-        self.surface
-            .as_mut()
-            .unwrap()
-            .buffer_mut()
-            .unwrap()
-            .as_mut()
-            .copy_from_slice(src);
-    }
-
-    /// Sets the color value of a pixel in the buffer
-    pub fn buffer_set(&mut self, idx: usize, src: u32) {
-        self.surface.as_mut().unwrap().buffer_mut().unwrap()[idx] = src;
-    }
-
-    /// Gets the color value of a pixel in the buffer
-    pub fn buffer_get(&mut self, idx: usize) -> u32 {
-        self.surface.as_mut().unwrap().buffer_mut().unwrap()[idx]
-    }
-
-    /// Returns the size of the buffer
-    pub fn buffer_len(&mut self) -> usize {
-        self.surface.as_mut().unwrap().buffer_mut().unwrap().len()
+    /// Gets a mutable reference to the buffer
+    pub fn buffer_mut(&mut self) -> softbuffer::Buffer<'_, Rc<Window>, Rc<Window>> {
+        self.surface.as_mut().unwrap().buffer_mut().unwrap()
     }
 }
