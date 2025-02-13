@@ -19,7 +19,7 @@ fn main() {
                 let x = index % width;
                 let red = x % 255;
                 let green = y % 255;
-                let blue = (x * y) % 255;
+                let blue = (255 - (red + green).min(255)) % 255;
 
                 buffer[index as usize] = blue | (green << 8) | (red << 16);
             }
