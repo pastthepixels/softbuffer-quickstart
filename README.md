@@ -30,6 +30,9 @@ fn main() {
 }
 ```
 
+## I wanna know more!
+`cargo add softbuffer_quickstart` and read the documentation at `doc/`!
+
 
 ## Contributing
 PRs are welcome! As with any of my other projects it might take a while for me to respond to issues/pull requests. I recommend not squashing your commits before you submit a PR as doing so makes it a bit harder to review your code.  
@@ -37,3 +40,4 @@ I'm looking for any ways to boost performance as much as possible while making t
 
 ## Ideas:
 - Adding icons to WindowProperties (probably good for new contributors)
+- Supporting compiling to wasm (hell)

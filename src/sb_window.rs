@@ -9,7 +9,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 use crate::{close, init, redraw, resize, run, RawSurface, RawWindow, WindowProperties};
 
-/// Wrapper for Softbuffer and a Winit window
+/// Wrapper for Softbuffer and a Winit window.
 pub struct SoftbufferWindow {
     window: RawWindow,
     surface: RawSurface,
