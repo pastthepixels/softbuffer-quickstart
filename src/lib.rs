@@ -1,4 +1,8 @@
+mod sb_window;
+
 use std::num::NonZeroU32;
+pub use sb_window::SoftbufferWindow;
+
 use std::rc::Rc;
 
 use softbuffer::Surface;
@@ -7,110 +11,121 @@ use winit::dpi::PhysicalSize;
 use winit::error::EventLoopError;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::window::{Window};
 
-/// Contains a few potential properties to set for a SoftbufferWindow when it is created.
+pub type RawWindow = Option<Rc<Window>>;
+pub type RawSurface = Option<Surface<Rc<Window>, Rc<Window>>>;
+
+/// Simple struct that holds some properties (size, title) for windows
 pub struct WindowProperties {
-    pub size: PhysicalSize<u32>,
-    pub title: Box<str>,
+    /// Initial width
+    pub width: u32,
+    /// Initial height
+    pub height: u32,
+    /// Title
+    pub title: &'static str,
 }
 
 impl Default for WindowProperties {
+    /// Creates an 800x600 window named "Softbuffer Window"
     fn default() -> WindowProperties {
         WindowProperties {
-            size: PhysicalSize::new(800, 600),
-            title: "Softbuffer window".into(),
+            width: 800,
+            height: 600,
+            title: "Softbuffer Window",
         }
     }
 }
 
-impl WindowProperties {
-    pub fn new(width: u32, height: u32, title: &str) -> WindowProperties {
-        WindowProperties {
-            size: PhysicalSize::new(width, height),
-            title: title.into(),
-        }
+/// Shorthand to run a struct that implements winit's [`ApplicationHandler`](https://rust-windowing.github.io/winit/winit/application/trait.ApplicationHandler.html)
+pub fn run<A: ApplicationHandler<()>>(window: &mut A) -> Result<(), EventLoopError> {
+    let event_loop = EventLoop::new()?;
+    event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.run_app(window)
+}
+
+/// Initialises and returns a new RawWindow and RawSurface given an `ActiveEventLoop` and `WindowProperties`.
+/// For instance, implementation within `ApplicationHandler::resumed` may look like:
+/// ```rust
+/// use winit::application::ApplicationHandler;
+/// use winit::event::WindowEvent;
+/// use winit::event_loop::ActiveEventLoop;
+/// use winit::window::WindowId;
+///  
+///  
+/// use softbuffer_quickstart::{init, RawSurface, RawWindow, WindowProperties};
+///  
+/// struct MyWindow {
+///     window: RawWindow,
+///     surface: RawSurface
+/// }
+///  
+/// impl ApplicationHandler for MyWindow {
+///     /// `ApplicationHandler::resumed()` implementation here
+///     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+///         (self.window, self.surface) = init(event_loop, &WindowProperties::default());
+///     }
+///  
+///     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+///         todo!()
+///     }
+/// }
+/// ```
+pub fn init(event_loop: &ActiveEventLoop, properties: &WindowProperties) -> (RawWindow, RawSurface) {
+    let window = {
+        let window = event_loop.create_window(
+            Window::default_attributes()
+                .with_title(properties.title)
+                .with_inner_size(PhysicalSize::new(
+                    properties.width,
+                    properties.height,
+                )),
+        );
+        Rc::new(window.unwrap())
+    };
+    let context = softbuffer::Context::new(window.clone()).unwrap();
+    let window : RawWindow = Some(window.clone());
+    let surface : RawSurface = Some(Surface::new(&context, window.clone().unwrap()).unwrap());
+    (window, surface)
+}
+
+/// Shorthand to listen for and handle WindowEvent::CloseRequested by closing windows
+pub fn close(event_loop: &ActiveEventLoop, event: &WindowEvent) {
+    if let WindowEvent::CloseRequested = event {
+        event_loop.exit();
     }
 }
 
-/// Wrapper for Softbuffer and a Winit window
-pub struct SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
-    window: Option<Rc<Window>>,
-    loop_fn: T,
-    surface: Option<Surface<Rc<Window>, Rc<Window>>>,
-    properties: WindowProperties,
-}
-
-impl<T> ApplicationHandler for SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = {
-            let window = event_loop.create_window(
-                Window::default_attributes()
-                    .with_title(self.properties.title.clone())
-                    .with_inner_size(self.properties.size),
-            );
-            Rc::new(window.unwrap())
-        };
-        let context = softbuffer::Context::new(window.clone()).unwrap();
-        self.window = Some(window.clone());
-        self.surface = Some(Surface::new(&context, window.clone()).unwrap());
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WindowEvent::Resized(new_size) => {
-                self.properties.size = new_size;
-                let (width, height) = (new_size.width, new_size.height);
-                self.surface
-                    .as_mut()
-                    .unwrap()
-                    .resize(
-                        NonZeroU32::new(width).unwrap(),
-                        NonZeroU32::new(height).unwrap(),
-                    )
-                    .unwrap();
-            }
-            WindowEvent::RedrawRequested => {
-                let mut buffer = self.surface.as_mut().unwrap().buffer_mut().unwrap();
-                (self.loop_fn)(self.window.clone().unwrap(), buffer.as_mut());
-                buffer.present().unwrap();
-                self.window.as_ref().unwrap().request_redraw();
-            }
-            _ => (),
-        }
+/// Shorthand to listen for and handle WindowEvent::Resized by resizing a buffer (`RawSurface`)
+pub fn resize(event: &WindowEvent, surface: &mut RawSurface) {
+    if let WindowEvent::Resized(size) = event {
+        surface
+            .as_mut()
+            .unwrap()
+            .resize(
+                NonZeroU32::new(size.width).unwrap(),
+                NonZeroU32::new(size.height).unwrap(),
+            )
+            .unwrap();
     }
 }
 
-impl<T> SoftbufferWindow<T>
-where
-    T: FnMut(Rc<Window>, &mut [u32]),
-{
-    /// Creates a new SoftbufferWindow.
-    /// `loop_fn` will be called every time the window needs to redraw,
-    /// and `properties` contains a WindowProperties instance that will be
-    /// read when the window is created.
-    pub fn new(loop_fn: T, properties: WindowProperties) -> SoftbufferWindow<T> {
-        SoftbufferWindow {
-            window: None,
-            loop_fn,
-            surface: None,
-            properties,
-        }
-    }
+/// Redraws a `RawSurface`. Call this on `WindowEvent::RedrawRequested` inside `ApplicationHandler::window_event`,
+/// right after you've drawn everything to the `RawSurface`.
+pub fn redraw(window: &mut RawWindow, surface: &mut RawSurface) {
+    surface
+        .as_mut()
+        .unwrap()
+        .buffer_mut()
+        .unwrap()
+        .present()
+        .unwrap();
+    window.as_ref().unwrap().request_redraw();
+}
 
-    /// Runs a SoftbufferWindow event loop.
-    pub fn run(&mut self) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::new().unwrap();
-        event_loop.set_control_flow(ControlFlow::Poll);
-        event_loop.run_app(self)
-    }
+/// Gets a mutable reference to a buffer from a `RawSurface`. Colors are `u32`s.
+/// Accessing an array might look like `softbuffer_quickstart::buffer_mut(&mut self.surface)[y * width + x] = 0xffffff`.
+/// Keep in mind you have to keep track of the buffer width yourself--the RawBuffer type can't do that.
+pub fn buffer_mut(surface: &mut RawSurface) -> softbuffer::Buffer<'_, Rc<Window>, Rc<Window>> {
+    surface.as_mut().unwrap().buffer_mut().unwrap()
 }
